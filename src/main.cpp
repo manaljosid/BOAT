@@ -3,8 +3,6 @@
 #include <SD.h>
 #include <Servo.h>
 #include <Wire.h>
-#include <avr/io.h>
-#include <avr/interrupt.h>
 #include <GPS.h>
 #include <BNO055.h>
 #include <IMUMaths/imumaths.h>
@@ -21,19 +19,15 @@
 #define GPSSerial Serial2 //What hardware serial port does the GPS use? (Check pinout)
 
 //Variables
-uint8_t state; //Needs documentation, state machine state
+uint8_t state = 255; //Needs documentation, state machine state, 255 is experimental
 unsigned long loopTimer = 0;
 
 //Forward declarations
-bool getIMUData();
-bool getGPSData();
-bool dumpFlash();
-bool writeDataToSerial(); //Missing pointer to the data itself
-
+bool getSensorData();
 
 //Create sensor objects
 Adafruit_GPS GPS(&GPSSerial);
-Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
+Adafruit_BNO055 BNO = Adafruit_BNO055(55, 0x28);
 
 void setup() {
   delay(250);
@@ -45,30 +39,13 @@ void loop() {
 
   if(millis() - loopTimer >= LOOP_TIMEOUT) {
     loopTimer = millis();
-    /*switch (state) {
+    switch (state) {
       case 255:
-        getIMUData();
-        writeDataToSerial();
+        //code
       break;
-    }*/
+    }
   }
 }
-
-bool getIMUData() {
-  //code
-}
-
-bool writeDataToSerial() {
-  //code
-}
-
-/*
-bool dumpFlash() {
-  char fileName[13] = "DLG_0000.CSV"; //Data log file name.
-  bool usingDatalogger = false; //Are we using the datalogger?
-}
-*/
-
 
 /*
   if(!GPS.begin(9600)) {
