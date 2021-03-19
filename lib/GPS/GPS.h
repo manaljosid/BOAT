@@ -26,7 +26,7 @@
 #ifndef _GPS_H
 #define _GPS_H
 
-#define USE_SW_SERIAL ///< comment this out if you don't want to include software serial in the library
+//#define USE_SW_SERIAL ///< comment this out if you don't want to include software serial in the library
 #define GPS_DEFAULT_I2C_ADDR 0x10  ///< The default address for I2C transport of GPS data
 #define GPS_MAX_I2C_TRANSFER 32  ///< The max number of bytes we'll try to read at once
 #define GPS_MAX_SPI_TRANSFER 100  ///< The max number of bytes we'll try to read at once
