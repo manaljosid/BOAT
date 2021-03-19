@@ -20,11 +20,14 @@
 
 //Variables
 bool ledPin = 13;
-uint8_t state = 254; //Needs documentation, state machine state, 254 is experimental, 255 is error
+uint8_t state = 0;              //See the state & error spreadsheet
+uint8_t errorCode = 0;          //See the state & error spreadsheet
+uint8_t gpsMissedMessage = 0;
 unsigned long loopTimer = 0;
 
 //Forward declarations
 bool getSensorData();
+bool startup();
 
 //Create sensor objects
 Adafruit_GPS GPS(&GPSSerial);
@@ -33,15 +36,37 @@ Adafruit_BNO055 BNO = Adafruit_BNO055(55, 0x28);
 //Let's get to setup!
 void setup() {
   delay(250);
+}
+
+void loop() {
+  if(loopTimer > millis()) loopTimer = millis();
+
+  switch(state) {
+    case 0:
+      if(!startup()) {
+        errorCode = 1;
+        state = 255;
+      }
+    break;
+    case 254:
+      if(millis() - loopTimer >= TEST_LOOP_TIMEOUT) {
+        loopTimer = millis();
+        if(!getSensorData()) state = 255;
+      }
+    break;
+  }
+}
+
+bool startup() {
   if(USE_SERIAL) Serial.begin(115200);
 
   if(!GPS.begin(9600)) {
     if(USE_SERIAL) Serial.println(F("Error initializing GPS, check wiring and restart!"));
-    while(1);
+    return false;
   }
   if(!BNO.begin()) {
     if(USE_SERIAL) Serial.println(F("Error initializing IMU, check wiring or I2C address and restart!"));
-    while(1);
+    return false;
   }
 
   //GPS Initialization
@@ -79,26 +104,28 @@ void setup() {
   } else {
     if(USE_SERIAL) Serial.println(F("Skipping GPS fix!"));
   }
-}
-
-void loop() {
-  if(loopTimer > millis()) loopTimer = millis();
-
-  switch(state) {
-    case 254:
-      if(millis() - loopTimer >= TEST_LOOP_TIMEOUT) {
-        loopTimer = millis();
-        if(!getSensorData()) state = 255;
-      }
-    break;
-  }
+  state = 254;
 }
 
 bool getSensorData() {
   //code for parsing GPS data
   if(GPS.newNMEAreceived()) {
+    gpsMissedMessage = 0;
     if(!GPS.parse(GPS.lastNMEA())) {
       if(USE_SERIAL) Serial.println(F("Could not parse NMEA sentence!"));
+      errorCode = 2;
+      return false;
+    }
+  } else {
+    gpsMissedMessage++;
+    /*
+    If we haven't received a message from the GPS for the last 100 loop runs (approx 10 seconds)
+    We assume we lost communications and throw an error
+    */
+    if(gpsMissedMessage >= 100) {
+      errorCode = 2;
+      return false;
     }
   }
+  return true;
 }
