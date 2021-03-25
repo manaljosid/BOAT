@@ -9,25 +9,47 @@
 #include <MatrixMath.h>
 
 //Some defines
-#define USE_SERIAL true       //Set to true only for testing
+#define USE_SERIAL true       //Set to false for release
 #define WAIT_FOR_GPS false    //Set to false only for testing
 #define USE_DATALOGGER true   //
 #define LOG_TO_SD_CARD true   //
-#define USE_GPS true          //
-#define USE_IMU true          //
-#define TEST_LOOP_TIMEOUT 100 // [ms]
+#define USE_GPS false         //Set to false only for testing
+#define USE_IMU true          //Set to false only for testing
+#define TEST_LOOP_TIMEOUT 100 //[ms]
 #define GPSSerial Serial2     //What hardware serial port does the GPS use? (Check pinout)
 
 //Variables
 bool ledPin = 13;
 uint8_t state = 0;              //See the state & error spreadsheet
 uint8_t errorCode = 0;          //See the state & error spreadsheet
-uint8_t gpsMissedMessage = 0;
-unsigned long loopTimer = 0;
+uint8_t gpsMissedMessage = 0;   //Counter for each time the main loop doesn't have a new GPS message
+unsigned long testLoopTimer = 0;    //
+
+struct SensorData {   //Structure with all sensor data to be used
+  float pitch;        //Pitch angle in radians
+  float yaw;          //Yaw angle in radians
+  float roll;         //Roll angle in radians
+  float heading;      //Compass heading of nose in radians
+  float track;        //Direction the boat is travelling in in radians
+  float latitude;     //Latitude in radians
+  float longitude;    //Longitude in radians
+  float speed;        //Speed in m/s
+  float temperature;  //On board temperature measured by the IMU in °C
+  float battVoltage;  //Battery voltage
+  uint8_t hour;       //Clock hour from GPS
+  uint8_t minute;     //Clock minute from GPS
+  uint8_t second;     //Clock second from GPS
+
+  //TEMPORARY FOR TESTING:
+  float oriX;
+  float oriY;
+  float oriZ;
+} sensorData;
 
 //Forward declarations
 bool getSensorData();
 bool startup();
+void printSensorData();
 
 //Create sensor objects
 Adafruit_GPS GPS(&GPSSerial);
@@ -39,7 +61,7 @@ void setup() {
 }
 
 void loop() {
-  if(loopTimer > millis()) loopTimer = millis();
+  if(testLoopTimer > millis()) testLoopTimer = millis();
 
   switch(state) {
     case 0:
@@ -49,12 +71,23 @@ void loop() {
       }
     break;
     case 254:
-      if(millis() - loopTimer >= TEST_LOOP_TIMEOUT) {
-        loopTimer = millis();
+      if(millis() - testLoopTimer >= TEST_LOOP_TIMEOUT) {
+        testLoopTimer = millis();
         if(!getSensorData()) state = 255;
+        if(USE_SERIAL) printSensorData();
       }
     break;
+    case 255:
+      Serial.print("ERROR "); Serial.println(errorCode);
+    break;
   }
+}
+
+void printSensorData() {
+  Serial.println(sensorData.oriX, 3);
+  Serial.println(sensorData.oriY, 3);
+  Serial.println(sensorData.oriZ, 3);
+  Serial.println("---");
 }
 
 bool startup() {
@@ -105,27 +138,45 @@ bool startup() {
     if(USE_SERIAL) Serial.println(F("Skipping GPS fix!"));
   }
   state = 254;
+  return true;
 }
 
 bool getSensorData() {
   //code for parsing GPS data
-  if(GPS.newNMEAreceived()) {
-    gpsMissedMessage = 0;
-    if(!GPS.parse(GPS.lastNMEA())) {
-      if(USE_SERIAL) Serial.println(F("Could not parse NMEA sentence!"));
-      errorCode = 2;
-      return false;
-    }
-  } else {
-    gpsMissedMessage++;
-    /*
-    If we haven't received a message from the GPS for the last 100 loop runs (approx 10 seconds)
-    We assume we lost communications and throw an error
-    */
-    if(gpsMissedMessage >= 100) {
-      errorCode = 2;
-      return false;
+  if(USE_GPS) {
+    if(GPS.newNMEAreceived()) {
+      gpsMissedMessage = 0;
+      if(!GPS.parse(GPS.lastNMEA())) {
+        if(USE_SERIAL) Serial.println(F("Could not parse NMEA sentence!"));
+        errorCode = 2;
+        return false;
+      }
+    } else {
+      gpsMissedMessage++;
+      /*
+      If we haven't received a message from the GPS for the last 100 loop runs (approx 10 seconds)
+      We assume we lost communications and throw an error
+      */
+      if(gpsMissedMessage >= 100) {
+        errorCode = 2;
+        return false;
+      }
     }
   }
+
+  sensors_event_t IMUevent;
+  BNO.getEvent(&IMUevent, Adafruit_BNO055::VECTOR_EULER);
+  //For some reason x and z are flipped, we flip them back here
+  sensorData.oriX = IMUevent.orientation.x;
+  sensorData.oriY = IMUevent.orientation.y;
+  sensorData.oriZ = IMUevent.orientation.z;
+  sensorData.heading = IMUevent.orientation.heading;
+
+  sensorData.hour = GPS.hour;
+  sensorData.minute = GPS.minute;
+  sensorData.second = GPS.seconds;
+  sensorData.track = GPS.angle;
+  sensorData.speed = GPS.speed * (1.852/3.6); //Convert to m/s
+
   return true;
 }

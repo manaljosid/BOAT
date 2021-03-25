@@ -132,9 +132,14 @@ bool Adafruit_BNO055::begin(adafruit_bno055_opmode_t mode) {
 
   write8(BNO055_SYS_TRIGGER_ADDR, 0x0);
   delay(10);
+  setAxisRemap(REMAP_CONFIG_P3);
+  delay(20);
+  setAxisSign(REMAP_SIGN_P1);
+  delay(20);
   /* Set the requested operating mode (see section 3.3) */
   setMode(mode);
   delay(20);
+
 
   return true;
 }
